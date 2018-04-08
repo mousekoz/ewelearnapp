@@ -5,8 +5,8 @@ import json
 
 db.create_all()
 
-GRAMMAR_TYPES = []
-LEXICAL_CLASSES = ['sentence', 'noun', 'verb', 'adjective', 'adverb', 'determiner']
+GRAMMAR_TYPES = ['first person plural', 'second person plural', 'third person plural', 'first person singular', 'second person singular', 'third person singular', 'question', 'negative']
+LEXICAL_CLASSES = ['sentence', 'noun', 'verb', 'adjective', 'adverb', 'determiner', 'subject pronoun', 'object pronoun', 'conjunction']
 
 class dictionary_parser:
 	def __init__(self, dict_file):
@@ -17,6 +17,8 @@ class dictionary_parser:
 		except json.decoder.JSONDecodeError:
 			print('The given JSON input file is invalid. Try validating it at https://jsonlint.com.')
 			sys.exit(0)
+
+		self.invalid_vocab_list = []
 
 	def eng_check(self, englist, vocab):
 		for en in englist:
@@ -32,23 +34,34 @@ class dictionary_parser:
 				if not en_in_vocab:
 					vocab.english_words.append(engdb)
 					if vocab.id:
-						print("<Vocab: ID {}> updated with {}".format(vocab.id, engdb))
+						print("English: {} included".format(engdb))
 
 	def gram_check(self, gramlist, vocab):
 		for gram in gramlist:
 			gramdb = db.session.query(Grammar).filter(Grammar.name==gram).first()
 
 			if not gramdb:
-				gramdb = Grammar(name=gram)
-				db.session.add(gramdb)
-				print("New Grammar added: {}".format(gramdb))
+				if gram not in GRAMMAR_TYPES:
+					self.invalid_vocab_list.append((vocab, 'Grammar Type', gram))
+
+					print('{} is not a valid Grammar Type'.format(gram))
+					return False
+
+				else:
+					gramdb = Grammar(name=gram)
+					db.session.add(gramdb)
+
+					print("New Grammar added: {}".format(gramdb))
 
 			if vocab:
 				gram_in_vocab = db.session.query(Vocab).filter(gram in vocab.grammar_types).count()
 				if not gram_in_vocab:
 					vocab.grammar_types.append(gramdb)
 					if vocab.id:
-						print("<Vocab: ID {}> updated with {}".format(vocab.id, gramdb))
+
+						print("Grammar Type: {} included".format(gramdb))
+
+			return True
 
 	def create_vocabulary_db(self):
 
@@ -57,12 +70,14 @@ class dictionary_parser:
 			cat_exist = db.session.query(Category.name).filter(Category.name==category).count()
 
 			if cat_exist:
+
 				print("Category: {} already exists".format(cdb))
 
 			# add new Category record
 			if not cat_exist:
 				cdb = Category(name=category)
 				db.session.add(cdb)
+
 				print("New Category added: {}".format(cdb))
 
 			for vocab in category_value:
@@ -77,19 +92,27 @@ class dictionary_parser:
 						lexdb = db.session.query(Lexical).filter(Lexical.name==vocab["lexical"]).first()
 
 						if not lexdb:
-							lexdb = Lexical(name=vocab["lexical"])
-							db.session.add(lexdb)
-							print("New Lexical Class added: {}".format(lexdb))
+							if vocab["lexical"] not in LEXICAL_CLASSES:
+								#invalid_vocab_tuple = (vocab, 'Lexical Class', vocab["lexical"])
+								self.invalid_vocab_list.append((vocab, 'Lexical Class', vocab["lexical"]))
 
-							# create new Vocab record
-							vocabdb = Vocab(ewe=ee, category=category, lexical=vocab["lexical"], audio=vocab["audio"], image=vocab["image"])
+								print('{} is not a valid Lexical Class'.format(vocab["lexical"]))
 
-							# check for existence of English and Grammar records and update the corresponding Vocab fields
-							self.eng_check(vocab["eng"], vocabdb)
-							self.gram_check(vocab["type"], vocabdb)
+							else:
+								lexdb = Lexical(name=vocab["lexical"])
+								db.session.add(lexdb)
+								print("New Lexical Class added: {}".format(lexdb))
 
-							db.session.add(vocabdb)
-							print("New Vocab added: {} \n".format(vocabdb))
+								# create new Vocab record
+								vocabdb = Vocab(ewe=ee, category=category, lexical=vocab["lexical"], audio=vocab["audio"], image=vocab["image"])
+
+								# check for existence of English and Grammar records and update the corresponding Vocab fields
+								self.eng_check(vocab["eng"], vocabdb)
+								valid_gram = self.gram_check(vocab["type"], vocabdb)
+
+								if valid_gram:
+									db.session.add(vocabdb)
+									print("New Vocab added: {} \n".format(vocabdb))
 
 						else:
 							print("{} already exists".format(lexdb))
@@ -99,9 +122,14 @@ class dictionary_parser:
 
 							# check for existence of English and Grammar records and update the corresponding Vocab fields
 							self.eng_check(vocab["eng"], vocabdb)
-							self.gram_check(vocab["type"], vocabdb)
+							valid_gram = self.gram_check(vocab["type"], vocabdb)
+
+							if valid_gram:
+								db.session.add(vocabdb)
+								print("New Vocab added: {} \n".format(vocabdb))
 
 							db.session.add(vocabdb)
+
 							print("New Vocab added:	{} \n".format(vocabdb))
 					
 					else: # if Vocab with corresponding ewe and lexical is in database
@@ -110,9 +138,17 @@ class dictionary_parser:
 
 						# check for existence of English and Grammar records and update the corresponding Vocab fields
 						self.eng_check(vocab["eng"], vocabdb)
-						self.gram_check(vocab["type"], vocabdb)
+						valid_gram = self.gram_check(vocab["type"], vocabdb)
 
-		#db.session.commit()
+						if valid_gram:
+							db.session.add(vocabdb)
+							print("New Vocab added: {} \n".format(vocabdb))
+
+		for iv in self.invalid_vocab_list:
+			config_var = {'Grammar Type':'GRAMMAR_TYPES', 'Lexical Class':'LEXICAL_CLASSES'}
+			print('{} \nhas an invalid {} ({}). Please amend input file OR update {} and run parser again.\n'.format(iv[0], iv[1], iv[2], config_var[iv[1]]))
+
+		db.session.commit()
 
 #dp = dictionary_parser("C:\\Users\\mawusi\\Dropbox\\Ewe_Project\\learnapp\\lesson_data\\vocabulary_test.json")
 dp = dictionary_parser("D:\\Dropbox\\Ewe_Project\\learnapp\\lesson_data\\vocabulary_test.json")
