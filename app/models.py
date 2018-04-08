@@ -6,50 +6,74 @@ from flask_login import UserMixin
 
 #Association Tables:
 
-lexical_classes = db.Table('lexical_classes', db.Column('ewe_vocab_id', db.Integer, db.ForeignKey('ewevocabulary.id')), 
-												db.Column('lexical_name', db.String(64), db.ForeignKey('lexicalclass.name')))
+vocab_grammar_assoc = db.Table('vocab_grammar_assoc', 
+	db.Column('vocab_id', db.Integer, db.ForeignKey('vocab.id')), 
+	db.Column('grammar_type', db.String(64), db.ForeignKey('grammar.name'))
+)
 
-grammar_types = db.Table('grammar_types', db.Column('ewe_vocab_id', db.Integer, db.ForeignKey('ewevocabulary.id')), 
-												db.Column('grammar_type', db.String(64), db.ForeignKey('grammartype.name')))
+vocab_english_assoc = db.Table('vocab_english_assoc', 
+	db.Column('vocab_id', db.Integer, db.ForeignKey('vocab.id')), 
+	db.Column('english_word', db.String(64), db.ForeignKey('english.word'))
+)
 
 @login.user_loader
 def load_user(id):
-    return User.get(int(id))
+	return User.get(int(id))
 
 class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(64), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
+	id = db.Column(db.Integer, nullable=False, primary_key=True)
+	username = db.Column(db.String(64), unique=True, nullable=False)
+	email = db.Column(db.String(120), unique=True, nullable=False)
 	#password_hash = db.Column(db.String(128))
 	#vocab_accessed = relationship to UserVocabulary tble
 
-    def __repr__(self):
-        return '<User {}>'.format(self.username)
+	def __repr__(self):
+		return '<User {}>'.format(self.username)
 
 class Category(db.Model):
-    name = db.Column(db.String(64), primary_key=True)
+	name = db.Column(db.String(64), nullable=False, primary_key=True)
+	
+	def __repr__ (self):
+		return '<Category {}>'.format(self.name)
 
-class EweVocabulary(db.Model):
-	id = db.Column(db.Integer, primary_key=True)
-	word = db.Column(db.String(64), nullable=False)
+class Vocab(db.Model):
+	id = db.Column(db.Integer, nullable=False, primary_key=True)
+	ewe = db.Column(db.String(64), nullable=False)
 	category = db.Column(db.String(64), db.ForeignKey('category.name'), nullable=False)
-	lexical_classes = db.relationship('LexicalClass', secondary=lexical_classes, lazy='dynamic', backref=db.backref('ewe_vocabulary', lazy='dynamic'))
-	grammar_types = db.relationship('GrammarType', secondary=grammar_types, lazy='dynamic', backref=db.backref('ewe_vocabulary', lazy='dynamic'))
 	audio = db.Column(db.String(240), nullable=True)
 	image = db.Column(db.String(240), nullable=True)
-	english_words  = db.relationship('EnglishWords', backref='ewe_vocabulary', lazy='dynamic')
+	lexical = db.Column(db.String(240), nullable=True)
+	grammar_types = db.relationship(
+		'Grammar', 
+		secondary=vocab_grammar_assoc,
+		backref='ewe_vocabulary', 
+		lazy='dynamic')
+	english_words  = db.relationship(
+		'English',
+		secondary=vocab_english_assoc,
+		backref='ewe_vocabulary', 
+		lazy='dynamic')
 
-class LexicalClass(db.Model):
-	name = db.Column(db.String(64),  primary_key=True)
+	def __repr__ (self):
+		return '<Vocab: Ewe: {},  {},  Lexical Class: {}, {} >'.format(self.ewe, self.english_words.all(), self.lexical, self.grammar_types.all())
 
-class GrammarType(db.Model):
-	name = db.Column(db.String(64),  primary_key=True)
+class Lexical(db.Model):
+	name = db.Column(db.String(64), nullable=False,  primary_key=True)
 
-class EnglishWords(db.Model):
-	id = db.Column(db.Integer, primary_key=True)
-	word = db.Column(db.String(64), nullable=False)
-	ewe_vocab_id = db.Column(db.Integer, db.ForeignKey('ewevocabulary.id'))
+	def __repr__ (self):
+		return '<Lexical Class: {}>'.format(self.name)
 
+class Grammar(db.Model):
+	name = db.Column(db.String(64), nullable=False, primary_key=True)
+
+	def __repr__ (self):
+		return '<Grammar Type: {}>'.format(self.name)
+
+class English(db.Model):
+	word = db.Column(db.String(64), nullable=False, primary_key=True)
+
+	def __repr__ (self):
+		return '<English: {}>'.format(self.word)
 
 """"
 # Association table
